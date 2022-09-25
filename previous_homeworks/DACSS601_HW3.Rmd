@@ -1,0 +1,149 @@
+---
+title: "DACSS601 HW3"
+subtitle: "Dataset selecting and wrangling"
+author: "Miguel Curiel"
+description: "Initial exploration of dataset for final project"  
+date: "`r Sys.Date()`"
+output: distill::distill_article
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 0. Load necessary packages
+
+First steps to ensure success when importing and exploring data.
+
+```{r warning=F, message=F}
+library(readr)
+library(dplyr)
+```
+
+# 1. Identify the dataset
+
+My interest lies in further understanding the effects of social media in people, from its impact to our day-to-day to the health repercussions (or advantages).
+
+To this end, Our World in Data (OWID) is a repository that compiles and analyzes data from several sources, from international organization's databases to scientific papers. Searching within OWID leads to three datasets of interest: two on digital use (internet and social media), and one on mental health.
+
+The digital use datasets come from an OECD report, they analyze time that young people (16-24 years old) spend on the internet and on social networking sites, and are already tidy as provided by OWID. The mental health dataset, however, is not as useful due to the age range - a solution to this is going directly to the source, the Institute for Health Metrics and Evaluation, and fixing the parameters (the closest age range is 10-24 years old).
+
+-   Percentage of young people engaging in social networking online (OECD via Our World in Data): <https://ourworldindata.org/rise-of-social-media>
+
+-   Daily time spent on the internet by young people (OECD via Our World in Data): <https://ourworldindata.org/rise-of-social-media>
+
+-   Prevalence of mental disorders in young people (Institute for Health Metrics and Evaluation, Global Burden of Disease Study): <https://vizhub.healthdata.org/gbd-results/>
+
+# 2. Read in the dataset
+
+Once each dataset's CSV has been downloaded, we read them in.
+
+```{r}
+setwd("/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals")
+internet <- read_csv("daily-time-spent-on-the-internet-by-young-people.csv")
+social_media <- read_csv("percentage-of-young-people-engaging-in-social-networking-online.csv")
+mental_health <- read_csv("IHME-GBD_2019_DATA-4c1e4e1a-1.csv")
+#head(mental_health) #unhash if snipet of the dataframe is desired
+```
+
+# 3. Identify potential research questions
+
+Some possibilities that come to mind:
+
+-   What is the relation, if any, between internet/social media use and mental disorders among OECD countries?
+
+-   Which countries have the greatest and lowest digital use to mental disorders ratio, and why?
+
+# 4. Perform data wrangling operations
+
+### A. Subset and rename variables
+
+
+Create two mental health dataframes, one for 2012-2014 and another for 2016, containing only the columns needed (country name, year, and value).
+
+```{r}
+mental_health_2012_2014 <- mental_health %>% 
+  filter(year == 2012 | year == 2013 | year == 2014) %>%
+  select(location_name, year, val) %>% 
+  rename(country_name = location_name, mental_disorders_prevalence = val)
+#head(mental_health_2012_2014)
+```
+
+```{r}
+mental_health_2016 <- mental_health %>% 
+  filter(year == 2016) %>%
+  select(location_name, year, val) %>% 
+  rename(country_name = location_name, mental_disorders_prevalence = val)
+#head(mental_health_2016)
+```
+
+Rename the columns within the Internet and Social Media Use dataframes to match above format (lower-cased and underscored).
+
+```{r}
+internet <- rename(internet, c(country_name = Entity, country_code = Code, year = Year, daily_internet_use = "Daily time spent on the internet by young people (hours)"))
+```
+
+```{r}
+social_media <- rename(social_media, c(country_name = Entity, country_code = Code, year = Year, social_media_use = "Proportion of people age 16-24 engaging in social networking online (%)"))
+```
+
+
+### B. Merge mental health with social media
+
+Join the 2013-2014 mental health dataframe with the 2013-2014 social media dataframe, using country and year as keys.
+
+```{r}
+mental_social_media <- merge(mental_health_2012_2014, social_media, by=c("country_name", "year"))
+#this drops two territories from the social media dataset (South Korea and OECD) - this is expected
+```
+
+
+### C. Merge mental health with internet
+
+Join the 2016 mental health dataframe with the 2016 internet dataframe, using country and year as keys.
+
+```{r}
+mental_internet <- merge(mental_health_2016, internet, 
+                         by=c("country_name", "year"))
+#this drops the OECD from both datasets - this is expected
+```
+
+
+### D. Calculate digital to mental health ratio
+
+Calculate a new column for each dataframe containing the operation: digital use (internet / social networking) divided by mental disorder prevalence.
+
+```{r}
+mental_social_media["mental_to_media_ratio"] <- mental_social_media["mental_disorders_prevalence"] / mental_social_media["social_media_use"]
+mental_social_media <- mental_social_media %>% 
+  relocate(country_name, country_code, year, mental_disorders_prevalence, social_media_use, mental_to_media_ratio) %>%
+  arrange(mental_to_media_ratio)
+rmarkdown::paged_table(mental_social_media)
+```
+
+```{r}
+mental_internet["mental_to_internet_ratio"] <- mental_internet["mental_disorders_prevalence"] / mental_internet["daily_internet_use"]
+mental_internet <- mental_internet %>% 
+  relocate(country_name, country_code, year, mental_disorders_prevalence, daily_internet_use, mental_to_internet_ratio)  %>%
+  arrange(mental_to_internet_ratio)
+rmarkdown::paged_table(mental_internet)
+```
+
+# 5. In conclusion
+
+From this initial approach, an interesting finding is that countries in Eastern and Northern Europe (such as Iceland and Estonia) are ranked relatively low, which means that they make less use of digital technologies and have lower rates of mental disorders. 
+
+Could this make these countries a good choice for living if what you seek is being mentally healthy and you like being outdoors or socializing? Could be, but it is too soon to say. The datasets still have to be further explored for conceptual and methodological drawbacks, and the findings still have to be further analyzed.
+
+# 6. Additional: Export dataframes to CSV
+
+```{r}
+write.csv(mental_internet,"/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals/mental_internet.csv", row.names = FALSE)
+```
+
+```{r}
+write.csv(mental_social_media,"/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals/mental_social_media.csv", row.names = FALSE)
+```
+

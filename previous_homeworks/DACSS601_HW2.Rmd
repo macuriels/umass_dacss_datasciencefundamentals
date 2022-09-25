@@ -1,0 +1,52 @@
+---
+title: "DACSS601 HW2"
+subtitle: "Reading in data"
+author: "Miguel Curiel"
+description: "This is a practice exercise to import and describe a dataset"  
+date: "`r Sys.Date()`"
+output: distill::distill_article
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 0. Install necessary packages
+
+First steps to ensure success when reading in data.
+
+```{r warning=F, message=F}
+library(readr)
+```
+
+# 1. Read in dataset
+
+The following dataset is a survey conducted by Whatsgoodly which asks what social media is preferred by millennials.
+
+-   The results were published by Brietbart in 2017: <https://www.breitbart.com/tech/2017/03/17/report-snapchat-is-most-important-social-network-among-millennials/>
+
+-   The dataset was published on data.world by Adam Halper (username "ahalps"): <https://data.world/ahalps/which-social-media-millennials-care-about-most>
+
+```{r}
+setwd("/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals/Week 4")
+social_media_millennials <- read_csv("WhatsgoodlyData-10.csv")
+#head(social_media_millennials) #unhash if snipet of the dataframe is desired
+#str(social_media_millennials) #unhash if data type per column is desired
+```
+
+# 2. Explain variables
+
+9,491 millennials were asked about their social media preferences, resulting in this dataset that contains 516 rows and 6 columns.
+
+| Column Name                     | Data Type | Variable Description                                                                                                                                                                                                                                                                   |
+|-------------------|-------------------|----------------------------------|
+| Column 1: "Question"            | Character | Contains the question asked: "You open ur phone and have a notif badge on instagram, facebook, snapchat, and linkedin...which do you click first?"                                                                                                                                     |
+| Column 2: "Segment Type"        | Character | Asks identifying information, such as university of origin or where the respondent is answering the survey.                                                                                                                                                                            |
+| Column 3: "Segment Description" | Character | Specifies aspects of the segment type, such as specifying the respondent's gender or university.                                                                                                                                                                                       |
+| Column 4: "Answer"              | Character | Refers to which social media each market segment responded as there preferred social media.                                                                                                                                                                                            |
+| Column 5: "Count"               | Numeric   | Refers to the number of respondents for each social media platform within their corresponding market segment. For example, how many women (Segment Description) withing the gender market segment (Segment Type) selected Instagram (Answer) as their preferred social media platform? |
+| Column 6: "Percentage"          | Numeric   | Shows the proportion of each social media platform within their market segment. For example, taking women as the whole of the market segment (i.e. the 100%), how many selected Instagram as their preferred social media platform?                                                    |
+
+Additional context and descriptions can be found directly in the article or in data.world

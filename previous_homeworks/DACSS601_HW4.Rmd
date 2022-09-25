@@ -1,0 +1,254 @@
+---
+title: "DACSS601 HW4"
+subtitle: "Descriptive statistics and visualization"
+author: "Miguel Curiel"
+description: "Describing and visualizing dataset for final project"  
+date: "`r Sys.Date()`"
+output: distill::distill_article
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 100, digits=2) #used to round to two decimals and deactivate scientific notation (e.g. 2.2e+01)
+```
+
+# 0. Load necessary packages
+
+First steps to ensure success when importing and exploring data.
+
+```{r warning=F, message=F}
+library(readr)
+library(tidyverse)
+library(pastecs) #used to generate summary statistics
+library(rvest) #used to add country regions
+library(ggrepel) #used for visualization feature
+```
+
+# 1. Read in datasets
+
+### Objective
+
+-   Understand the effects of using social media and the internet on young people's mental health.
+
+### Data
+
+-   Data on **social media and internet use** provided by the Organisation for Economic Co-ooperation and Development (OECD) via Our World in Data.
+
+-   Data on **mental disorder prevalence** in young people provided by the Institute for Health Metrics and Evaluation, Global Burden of Disease Study.
+
+For more information on the nuances of the data and how the dataframes were created, please refer to DACSS601 HW3: <https://rpubs.com/macuriel/dacss601hw3>
+
+```{r}
+setwd("/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals")
+mental_internet <- read_csv("mental_internet.csv")
+mental_social_media <- read_csv("mental_social_media.csv")
+```
+
+# 2. Correcting and expanding existing dataframe
+
+First off, a minor update was performed on the mental health data previously used. The values used in HW3 were ocurrences of mental disorders per country. This could be misleading for future analysis because bigger countries could naturally have a higher number of mental disorders, so from here on out it has been decided to use the percentage instead (ocurrences over the total population).
+
+Further, the previous dataframe only included country name and their respective 3-digit country code. An idea for future groupings and analysis is to add country region. This can be done by scraping a website that already contains such information and adding it to the existing dataframes. A sample code for the scraping can be found here:
+<https://rpubs.com/YJ_Choi/AssignRegionalClassification>
+
+```{r}
+# obtain country regions from the United Nations Statistic Division
+url<-("https://unstats.un.org/unsd/methodology/m49/")
+
+# data table scraping from the web 
+ctry_UNSD<-read_html(url) %>% 
+    html_nodes("table") %>%
+    .[[7]] %>% 
+    html_table(header = TRUE)     
+# tidy up
+ctry_UNSD<-ctry_UNSD %>%
+    rename (country_name =   "Country or Area") %>% 
+    rename (M49 =   "M49 code") %>% 
+    rename (country_code   =   "ISO-alpha3 code") %>% 
+    select(country_name, M49, country_code) 
+```
+
+```{r}
+# Assign sub-region names
+#head(ctry_UNSD, 20)
+#str(ctry_UNSD)
+ctry_UNSD$country_name<-as.character(ctry_UNSD$country_name)
+ctry_UNSD<-ctry_UNSD %>% 
+    mutate(
+    country_region=country_name,
+    country_region=ifelse(country_code!="", "", country_region)
+    )
+for (i in 1:nrow(ctry_UNSD)){
+    if (ctry_UNSD[i,4]==""){
+    ctry_UNSD[i,4]=ctry_UNSD[i-1,4]
+    }}
+```
+
+Dropping unnecessary columns from the United Nations dataframe.
+
+```{r}
+#keep only country code and country region
+ctry_UNSD <-ctry_UNSD[c("country_code","country_region")]
+```
+
+Performing a left join between the mental health / internet use dataframes and the United Nations dataframe.
+
+```{r}
+#merge internet use with country regions
+mental_internet <- left_join(mental_internet, ctry_UNSD, by="country_code")
+```
+
+Reorder columns for desired arrangement.
+
+```{r}
+#reorder columns
+mental_internet <- mental_internet[,c(1,2,7,4,5,6)]
+```
+
+Rename unclear country region (from Sark to Northern Europe).
+
+```{r}
+#rename Northern Europe
+mental_internet[mental_internet == "Sark"] <- "Northern Europe"
+```
+
+Performing a left join between the mental health / internet use dataframes and the United Nations dataframe.
+
+```{r}
+#merge social media with country regions
+mental_social_media <- left_join(mental_social_media, ctry_UNSD, by="country_code")
+```
+
+Reorder columns for desired arrangement.
+
+```{r}
+#reorder columns
+mental_social_media <- mental_social_media[,c(1,2,7,4,5,6)]
+```
+
+Rename unclear country region (from Sark to Northern Europe).
+
+```{r}
+#rename Northern Europe
+mental_social_media[mental_social_media == "Sark"] <- "Northern Europe"
+```
+
+# 3. Compute descriptive statistics
+
+Calculate mean, median, standard deviation, among others, for both dataframes.
+
+```{r}
+##opted for using stat.desc function from the pastecs package
+##alternatives
+#use summary
+#surround by knitr::kable (can add "simple" argument)
+#or pipe to htmlTable::htmlTable()
+knitr::kable(stat.desc(mental_internet))
+```
+
+```{r}
+##opted for using stat.desc function from the pastecs package
+##alternatives
+#use summary
+#surround by knitr::kable (can add "simple" argument)
+#or pipe to htmlTable::htmlTable()
+knitr::kable(stat.desc(mental_social_media))
+```
+
+# 4. Group and summarize
+
+Exploration using the group_by and summarize functions. In this case, an idea is to group the countries by region and obtain the mean of each region's respective internet and social media use.
+
+```{r}
+#mean of internet use by country region
+mental_internet %>%
+  group_by(country_region) %>%
+  summarise(mean(daily_internet_use))
+```
+
+```{r}
+#mean of social media use by country region
+mental_social_media %>%
+  group_by(country_region) %>%
+  summarise(mean(social_media_use))
+```
+
+# 5. Create and explain visualizations
+
+Starting off with a couple of univariate visualizations.
+
+```{r}
+#social media histogram
+ggplot(mental_social_media, aes(social_media_use)) +
+  geom_histogram(aes(y = ..density..), alpha = 0.5) +
+  geom_density(alpha = 0.2, fill="red")
+```
+
+```{r}
+#internet usehistogram
+ggplot(mental_internet, aes(daily_internet_use)) +
+  geom_histogram(aes(y = ..density..), alpha = 0.5) +
+  geom_density(alpha = 0.2, fill="red")
+```
+
+From the above graphics we can observe the distribution of internet use and social media use. With regards to social media use, it is a percentage that describes how many young people are engaging in social networking sites. Most countries have around 90% of their young population engaging in these practices, with a couple of outliers sitting at around 75% and 50% respectively.
+
+Internet use, in contrast, measures the hours that young people spend on the internet per day. This seems more equally distributed than the percentage of young people engaging in social media, with most country's youth population spending between 3 and 6 hours on the internet.
+
+Continuing with the bivariate statistics: What would happen if we add mental health to the mix?
+
+```{r, fig.width = 10, fig.height = 7.5}
+# social media scatter plot
+# these arguments could be added to view a different scale of the data scale_y_log10()+ scale_x_log10()+
+mental_social_media %>% 
+  ggplot(aes(x=mental_disorders_prevalence,y=social_media_use)) +
+  geom_point(alpha=0.5, aes(color=country_region)) + 
+  labs(x="Prevalence of Mental Disorders", y= "Percentage of Youth Engaging in Social Media",
+       title="Mental Disorders versus Social Media Use") +
+  geom_smooth(method=lm,se=FALSE) +
+  ggrepel::geom_text_repel(data = mental_social_media %>%
+                             filter(mental_disorders_prevalence<.15 | mental_disorders_prevalence>.21) %>%
+                             sample_n(13), aes(label = country_name))
+```
+
+```{r, fig.width = 10, fig.height = 7.5}
+# internet scatter plot
+# these arguments could be added to view a different scale of the data scale_y_log10()+ scale_x_log10()+
+mental_internet %>% 
+  ggplot(aes(x=mental_disorders_prevalence,y=daily_internet_use)) +
+  geom_point(alpha=0.5, aes(color=country_region)) + 
+  labs(x="Prevalence of Mental Disorders", y= "Daily Hours Spent on the Internet by the Youth",
+       title="Mental Disorders versus Daily Internet Use") +
+  geom_smooth(method=lm,se=FALSE) +
+  ggrepel::geom_text_repel(data = mental_internet %>%
+                             filter(mental_disorders_prevalence<.15 | mental_disorders_prevalence>.21) %>%
+                             sample_n(9), aes(label = country_name))
+```
+
+From the first graphic, mental disorders plotted against social media use, we can observe Mexico as a notable outlier - it presents a low percentage of young people engaging in social media and a high amount of mental disorders. Data for Mexico's internet use is not available, therefore the second graph does not present such an outlier.
+
+A trend can be observed in both graph's high and low values: Countries in Eastern and Northern Europe can be found as having low prevalence of mental disorders, whereas countries in Southern Europe and Oceania (Australia and New Zealand) have higher rates.
+
+Further the second graphs seems to points towards a positive correlation between prevalence of mental disorders and daily hours spent on the internet, i.e. countries where the youth spends more hours on the internet also tend to have more mental disorders.
+
+# 6. Limitations in the visualizations
+
+A first limitation is both conceptual and visual, and that is the scope of the data. Given that the sample is relatively small, it would be hard to jump to conclusions and it may not make sense to color the graph by country region.
+
+A second limitation would be the outliers present in the data and which are most notable in the social media graphs (both univariate and bivariate). This makes the plots seem zoomed out and could lessen the experience of observing the actual trend in the data.
+
+A third limitation would be conceptual in nature. Does it make sense to plot amount of people with mental disorders against percentage of young people engaging in social media and against amount of hours spent on the internet?
+
+A fourth and last limitation would be the data quality, specifically regarding the age-range used: social media use measures 16-24, internet use measures 14-24, and mental disorders measures 10-24. 
+
+# 7. Optional: Export results
+
+```{r}
+#write.csv(mental_internet,"/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals/mental_internet.csv", row.names = FALSE)
+```
+
+```{r}
+#write.csv(mental_social_media,"/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals/mental_social_media.csv", row.names = FALSE)
+```

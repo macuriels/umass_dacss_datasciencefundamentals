@@ -1,0 +1,228 @@
+---
+title: "DACSS601 HW5"
+subtitle: "Final project preparation"
+author: "Miguel Curiel"
+description: "Updating and enhancing final project"  
+date: "`r Sys.Date()`"
+output: distill::distill_article
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 100, digits=2) #used to round to two decimals and deactivate scientific notation (e.g. 2.2e+01)
+```
+
+# 0. Load necessary packages
+
+First steps to ensure success when importing and exploring data.
+
+```{r warning=F, message=F}
+library(tidyverse)
+library(ggrepel) #used for visualization feature
+library(countrycode) #used to assign ISO3 country codes
+```
+
+# 1. Refining research question and updating data wrangling
+
+### Question
+
+-   Previous
+    -   Understand the effects of using social media and the internet on young people's mental health.
+-   New
+    -   What is the relation between hours spent on social media and mental disorder prevalence, by country?
+
+### Data set update
+
+**Data on mental health:**
+
+-   Previous
+
+    -   Used number of occurrences of mental disorders in young people for 2012 through 2016 by country, as provided by the Institute for Health Metrics and Evaluation (IHME), Global Burden of Disease Study (GDB).
+
+-   New
+
+    -   Now, data is still sourced from the IHME, but occurrence of mental disorders have been changed for percentage, time frame has been increased from 2012 to 2019, and the age range has changed from 10-24 to 15-49 to match the new data social media use.
+
+**Data on digital media:**
+
+-   Previous
+
+    -   Previous homeworks use two datasets on internet and social media use provided by the Organisation for Economic Co-ooperation and Development (OECD) via Our World in Data.
+
+-   New
+
+    -   Now, the above are replaced for one dataset sourced from the Global Web Index (GWI), which provides data for more countries and covers change over several years. More specifically, this dataset provides the amount of hours people from 45 different countries spend on social networking sites, with an analysis going from 2012 to 2019.
+
+        -   The data can be found on page 8 of GWI's 2019 Flagship Report. The website to download from GWI's website could not be found, but the PDF report can be observed here: <https://www.gwi.com/hubfs/Downloads/2019%20Q1%20Social%20Flagship%20Report.pdf>
+
+        -   Sidenotes: GWI's 2022 Flagship Report is easier to find and download, but covers less countries and less years; We Are Social's Global Overview Reports is extensive and draws from GWI, as well as from several other sources, using their data is less accessible and, in general, does not emphasize on country-yearly relationships.
+
+```{r}
+#setting working directory and reading in raw datasets
+setwd("/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals")
+social_media <- read_csv("GWI_2019.csv")
+mental_health <- read_csv("IHME-GBD_2019_DATA-0b1f59f6-1.csv")
+```
+
+### Data wrangling update
+
+**Data on mental health**
+
+Data is downloaded "as is" from IMHE's database; afterwards, the conversions needed are renaming columns, dropping those that are not needed, and adding columns corresponding to country codes and regions (the last bit was
+
+```{r}
+mental_health <- mental_health %>%
+  select(location_name, year, val) %>%
+  rename(country_name = location_name, mental_disorders_prevalence = val) %>%
+  mutate(country_code = countrycode(sourcevar = country_name, origin = "country.name", destination = "iso3c"))
+```
+
+**Data on digital media**
+
+The data is transcribed "as is" from a PDF which contains country name, year and hours spent on social media (worth noting that several countries have missing values); afterwards, the conversions needed are dropping the country names in favor of the ones used by the IMHE, adding columns to match to country codes and regions (this is done using the some process as with the mental health dataframe).
+
+```{r}
+social_media <- social_media %>%
+  mutate(country_code = countrycode(sourcevar = country_name, origin = "country.name", destination = "iso3c")) %>%
+  select(country_code, year, social_media_use)
+```
+
+**Merge both dataframes**
+
+Previously, we had two dataframes given that we had three datasets; now, we only need to merge to create one ultimate dataframe (still done by merging on country code and year).
+
+```{r}
+mental_health_social_media <- merge(mental_health, social_media, 
+                                    by=c("country_code", "year"))
+```
+
+**Add country region and relocate columns**
+
+Previously, this adding country region was done by a using complex scraping of country regions from a United Nations website; now, this is done by simply using the `countrycode` package. Further, rearranging columns can be done by using vector notation - i.e. [,c(1,...)] - or explicitly naming the columns. In this case, relocating by using column names is favored for clarity.
+
+```{r}
+mental_health_social_media <- mental_health_social_media %>%
+  mutate(country_region = countrycode(sourcevar = country_name, origin = "country.name", destination = "region")) %>%
+  relocate(country_name, country_code, country_region, year, mental_disorders_prevalence, social_media_use)
+```
+
+**Optional: Remove incomplete data**
+
+The below code has not been run, but is a placeholder if it is deemed better to remove countries with incomplete data. Previously, the data on social media was smaller, hence did not have this issue; the new data, while more comprehensive, has some gaps.
+
+```{r}
+##unhash below if needed
+#mental_health_social_media <- mental_health_social_media[!is.na(mental_health_social_media$social_media_use), ]
+```
+
+# 2. Update based on previous comments
+
+### From Homework 3
+
+These are the comments made on that homework, and their corresponding answers/corrections:
+
+-   Define acronyms: All acronyms used throughout the analysis are previously defined.
+
+-   Difference between internet use and social media use: No longer applicable since now only data on social media is used.
+
+-   Explain units of measurement: Explained in the first section of the present article.
+
+-   Explain the reasoning behind a ratio: Previously, a ratio between mental health and internet / social media use was created; now, this is no longer calculated since, conceptually, it does lead to significant findings (i.e. a country can have a high ratio because it either has high mental disorder prevalence or because it has high internet use, hence the ratio does not provide definitive answers).
+
+### From Homework 4
+
+These are the comments made on that homework, and their corresponding answers/corrections:
+
+-   Arrange mean tables by value: Correction as follows (interesting to find that, to use the arrange function, we first have to ungroup).
+
+```{r}
+#mean of mental disorders prevalence by country region
+mental_health_social_media %>%
+  group_by(country_region) %>%
+  summarise(mean_mdp = mean(mental_disorders_prevalence)) %>%
+  ungroup() %>%
+  arrange(desc(mean_mdp))
+```
+
+```{r}
+#mean of mental disorders prevalence by country region
+#na.rm parameter passed to account for missing values
+mental_health_social_media %>%
+  group_by(country_region) %>%
+  summarise(mean_smu = mean(social_media_use, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(desc(mean_smu))
+```
+
+-   Specify histogram parameters and change bin size: Since dataset has change since last homework, histograms are removed in favor of a facet grid of histograms (which is also part of homework 5). In particular, this is mapping the daily hours spent on the internet for all of the countries over the years.
+
+```{r}
+ggplot(data = mental_health_social_media, aes(x = social_media_use)) + 
+  geom_histogram(bins = 10) + 
+  facet_wrap(~year)
+```
+
+-   Change axis of scatter plot and avoid coloring by region: Reversing the axis still applicable as the same data is used (previously mental disorders were on the X axis, now it will be on the Y); however, for the coloring, it was decided to previously avoid hueing by region given that there was only data available for \~10 countries, but since the sample size increased to over 40, it could be argued that now this could add value (plus, it's part of description of homework 5). The following is an example plotted only against the year 2019.
+
+```{r}
+# social media scatter plot
+# these arguments could be added to view a different scale of the data scale_y_log10()+ scale_x_log10()+
+filter(mental_health_social_media, year == 2019) %>%
+  ggplot(aes(x=social_media_use, y=mental_disorders_prevalence)) +
+  geom_point(alpha=0.5, aes(color=country_region)) + 
+  labs(x="Hours spent on social media", y= "% of total population with mental disorders",
+       title="Mental Disorders versus Social Media Use") +
+  geom_smooth(method=lm,se=FALSE)
+```
+
+# 3. Closing thoughts and questions
+
+Final questions in preparation of the final project.
+
+-   What is missing (if anything) in your analysis process so far?
+
+    -   With the inclusion of this new dataset, I still need to think how to best reflect the year on year change on this mental health / social media relationship. Maybe create more, or better, graphs than a facet grid and a scatter plot.
+
+    -   Also implied by using this new dataset, there's the question of what to do with missing values? Mental health data is complete for all of the analyzed years (2012-2019), but the data on social media is only complete for the last two years (2018-2019).
+
+    -   I also need to stylize my graphs. Maybe make the description more user-friendly, maybe show labels for top and low values, maybe modify background, maybe make the overall graphics bigger.
+
+    -   I would also like to include a correlation analysis, or some time of statistical method, 1) to add mathematical arguments to this project and 2) for the sake of practicing the coding behind.
+
+-   What conclusions can I make about my research question at this point?
+
+    -   From the grouping and summarizing, and for data from 2012 through 2019, North America is the region with the most mental disorders. As for social media, Latin America and Caribbean registers most hours on social networking sites.
+
+    -   From the histogram of social media use over the years, it seems the world is spending more time on social networking sites.
+
+    -   DISCLAIMER: The following statements require further inquiry as they could be interesting, but go against my unstated hypothesis and the general consensus (the general consensus being that more time on social media equates to more mental health issues).
+
+        -   From the regression line in the scatter plot, it seems there is a negative correlation between hours spent on social media and mental health disorders - i.e., the more people in a country report to spend hours in social media, the less mental disorders this country could have.
+
+        -   From the colors (country regions) in the scatter plot, it seems countries in Europe and Central Asia have a high prevalence of mental disorders and spend the least time on social network sites. In contrast, countries in Sub-Saharan Africa reported spending a lot of time on social media but are also some that have the lowest prevalence of mental disorders.
+
+-   What do you think a naive reader would need to fully understand your graphs?
+
+    -   I think further breaking down the concepts and methodology wouldn't hurt (be more specific on how the data was obtained and what is implied by saying mental disorder prevalence or time on social media).
+
+    -   The facet grid would need to be colored, labeled, or overall stylized, in a different manner.
+
+    -   The scatter plot could maybe benefit from adding labels, or doing something to emphasize country clusters.
+
+-   Is there anything I want to answer with my dataset, but can't?
+
+    -   Having an initial, and controversial, answer (more time on social media may correlate to lower mental disorders) begs for further questions:
+
+        -   Could *how* we use social media be influencing this? Maybe it's not just the time, but the intent of our time on social media?
+
+        -   What other external factors could be coming in play? Could being in a high income country weigh more heavily on your mental health than social media?
+
+It may be worth while - and not that complicated - adding at least one of these elements. Perhaps downloading another package, or scraping another website, that contains country's income group? Food for thought, but definitely exciting, and any suggestions are more than welcome!
+
+# 4. Optional: Export results
+
+```{r}
+#write.csv(mental_health_social_media,"/Users/mcurielinteros.ai/Documents/UMass/Data Science Fundamentals/mental_health_social_media", row.names = FALSE)
+```
