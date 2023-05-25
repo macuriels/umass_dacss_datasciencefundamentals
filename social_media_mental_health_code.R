@@ -1,4 +1,4 @@
-#load neccesary packages
+# load neccesary packages
 library(tidyverse) #used for elementary data wrangling and visualization
 library(countrycode) #used to assign countries their respective regions and iso3 codes
 library(lubridate) #used to deal with dates and times
@@ -6,52 +6,53 @@ library(wbstats) #used to add total population and gross domestic product to cou
 library(plotly) #used for dynamic visualizations
 library(naniar) #used for missing values visualization
 library(corrplot) #used for correlation matrix
+library(quarto)
 
-#deactive scientific notation and round to two decimals
+# deactive scientific notation and round to two decimals
 options(scipen = 100, digits=2)
 
+# setting for table view
 knitr::opts_chunk$set(echo = TRUE)
 
-#set working directory and read in raw datasets
-setwd("/Users/mcurielinteros.ai/Documents/UMass/umass_dacss_datasciencefundamentals")
-social_media <- read_csv("GWI_social media use by country_2019.csv")
-mental_health <- read_csv("IMHE_mental disorders by country_2019.csv")
+# read in raw datasets
+social_media <- read_csv("GWI_socialmedia_2019.csv")
+mental_health <- read_csv("IMHE_mentaldisorders_2019.csv")
 
-#read and wrangle mental health data
+# read and wrangle mental health data
 mental_health <- mental_health %>%
   select(location_name, year, val) %>%
   rename(country_name = location_name, population_with_mental_disorders = val) %>%
   mutate(country_code = countrycode(sourcevar = country_name, origin = "country.name", destination = "iso3c"))
 
-#read and wrangle social media data
+# read and wrangle social media data
 social_media <- social_media %>%
   mutate(country_code = countrycode(sourcevar = country_name, origin = "country.name", destination = "iso3c")) %>%
-  mutate(social_media_use = hms(social_media_use)) %>% #split hours, minutes and seconds
+  mutate(social_media_use = hms(social_media_use)) %>% # split hours, minutes and seconds
   mutate(social_media_use = hour(social_media_use)*60 + minute(social_media_use)) %>% #to get total minutes spent on social media
   rename(minutes_on_social_media = social_media_use) %>%
-  select(country_code, year, minutes_on_social_media) #dropping country_name
+  select(country_code, year, minutes_on_social_media) # dropping country_name
 
-#merge social media and mental health dataframes
+# merge social media and mental health dataframes
 mental_health_social_media <- merge(mental_health, social_media, 
                                     by=c("country_code", "year"))
 
-#add country region
+# add country region
 mental_health_social_media <- mental_health_social_media %>%
   mutate(country_region = countrycode(sourcevar = country_name, origin = "country.name", destination = "region"))
 
-#read in socioeconomic data
+# read in socioeconomic data
 socioeconomic_indicators <- wb_data(
   indicator = c("SP.POP.TOTL","NY.GDP.MKTP.CD") #World Bank codes for GDP and total population
   , country = c("countries_only") , start_date = 2012
   , end_date = 2019
 )
 
-#wrangle socioeconomic data
+# wrangle socioeconomic data
 socioeconomic_indicators <- socioeconomic_indicators %>%
   rename(country_code = iso3c, year = date, total_population = SP.POP.TOTL, gdp = NY.GDP.MKTP.CD) %>%
   select(country_code, year, total_population, gdp) #dropping country name and two-digit code
 
-#merge socioeconomic data with social media and mental health dataframe
+# merge socioeconomic data with social media and mental health dataframe
 mental_health_social_media <- merge(
   mental_health_social_media
   , socioeconomic_indicators
@@ -68,18 +69,19 @@ mental_health_social_media <- merge(
     , total_population
   )
 
-#code to generate snippet of resulting dataframe
+# code to generate snippet of resulting dataframe
 rmarkdown::paged_table(mental_health_social_media[sample(nrow(mental_health_social_media), 10), ])
 
-#plot missing values
+# plotting missing values 
 plot_missing_values <- gg_miss_fct(x = mental_health_social_media, fct = year)
+
 plot_missing_values
 
-#line plot for global averages over the years
+# plotting global averages over the years
 lineplot_mental_health_social_media <- mental_health_social_media %>%
-  select(year, population_with_mental_disorders, minutes_on_social_media) %>% #selecting variables of interest
+  select(year, population_with_mental_disorders, minutes_on_social_media) %>% # selecting variables of interest
   mutate(population_with_mental_disorders = population_with_mental_disorders*100) %>%
-  group_by(year) %>% #step needed to calculate global means
+  group_by(year) %>% # step needed to calculate global means
   summarise_at(vars(population_with_mental_disorders:minutes_on_social_media), mean, na.rm = TRUE) %>%
   plot_ly(width = 500) %>%
   add_trace(
@@ -122,60 +124,61 @@ lineplot_mental_health_social_media <- mental_health_social_media %>%
 
 lineplot_mental_health_social_media
 
-#choropleth map
-#animated map inspired by Plotly's source code
-#url for map: https://plotly.com/r/choropleth-maps/
-#url for buttons: https://plotly.com/r/custom-buttons/
+# plotting global averages over the years
 choroplethmap_mental_health_social_media <- mental_health_social_media %>%
   plot_ly(
-    type='choropleth'
-    , locations = ~country_code
-    , frame = ~year
-    #, height = 500
-    , width = 750
+    type = 'choropleth',
+    locations = ~country_code,
+    frame = ~year,
+    width = 750
   ) %>%
   add_trace(
-    z = ~population_with_mental_disorders
-    , colorscale = "YlOrRd"
-    , showscale = FALSE
-    , reversescale = TRUE
-    , text = "Mental Disorder Prevalence"
+    z = ~population_with_mental_disorders,
+    colorscale = "YlOrRd",
+    showscale = FALSE,
+    reversescale = TRUE,
+    text = "Mental Disorder Prevalence",
+    visible = FALSE  # Set the initial visibility of the trace to FALSE
   ) %>%
   add_trace(
-    z = ~minutes_on_social_media
-    , colorscale = "Blues"
-    , showscale = FALSE
-    , reversescale = TRUE
-    , text = "Minutes on Social Media"
+    z = ~minutes_on_social_media,
+    colorscale = "Blues",
+    showscale = FALSE,
+    reversescale = TRUE,
+    text = "Minutes on Social Media",
+    visible = TRUE  # Set the initial visibility of the trace to TRUE
   ) %>%
   layout(
-    title = list(text = "<b>Country Averages Over The Years</b>", x = 0)
-    , autosize = TRUE
-    , updatemenus = list(
+    title = list(text = "<b>Country Averages Over The Years</b>", x = 0),
+    autosize = TRUE,
+    updatemenus = list(
       list(
-        active = 0
-        , type= "buttons"
-        , direction = "right"
-        , xanchor = "center"
-        , yanchor = "bottom"
-        , x = .5
-        , y = -.1
-        , buttons = list(
+        active = 0,
+        type = "buttons",
+        direction = "right",
+        xanchor = "center",
+        yanchor = "bottom",
+        x = .5,
+        y = -.1,
+        buttons = list(
           list(
-            label = "Click to view minutes on social media (blue)"
-            , method = "update"
-            , args = list(list(visible = c(TRUE, FALSE))))
-          , list(
-            label = "Click to view mental disorder prevalence (red)"
-            , method = "update"
-            , args = list(list(visible = c(FALSE, TRUE))))
-        ))))
+            label = "Click to view minutes on social media (blue)",
+            method = "update",
+            args = list(list(visible = list(TRUE, FALSE)))
+          ),
+          list(
+            label = "Click to view mental disorder prevalence (red)",
+            method = "update",
+            args = list(list(visible = list(FALSE, TRUE)))
+          )
+        )
+      )
+    )
+  )
 
 choroplethmap_mental_health_social_media
 
-#scatter plot
-#animated scatterplot inspired by Plotly's source code
-#url: https://plotly.com/r/animations/
+# plotting social media against mental health
 scatterplot_mental_health_social_media <- mental_health_social_media %>%
   mutate(population_with_mental_disorders = population_with_mental_disorders*100) %>%
   plot_ly(
@@ -198,7 +201,7 @@ scatterplot_mental_health_social_media <- mental_health_social_media %>%
 
 scatterplot_mental_health_social_media
 
-#correlation matrix
+# plotting correlation matrix
 cor(
   select(mental_health_social_media, -starts_with(c("country", "year")))
   , use = "na.or.complete"
@@ -212,5 +215,3 @@ cor(
     , addCoef.col = 'grey50' #includes grey correlation coefficients
     , cl.pos = "n" #removes color legend/gradient
   )
-
-

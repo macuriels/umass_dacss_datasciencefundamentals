@@ -22,7 +22,7 @@ categories:
 #| label: setup
 #| warning: false
 
-#load neccesary packages
+# load neccesary packages
 library(tidyverse) #used for elementary data wrangling and visualization
 library(countrycode) #used to assign countries their respective regions and iso3 codes
 library(lubridate) #used to deal with dates and times
@@ -30,8 +30,9 @@ library(wbstats) #used to add total population and gross domestic product to cou
 library(plotly) #used for dynamic visualizations
 library(naniar) #used for missing values visualization
 library(corrplot) #used for correlation matrix
+library(quarto)
 
-#deactive scientific notation and round to two decimals
+# deactive scientific notation and round to two decimals
 options(scipen = 100, digits=2)
 
 knitr::opts_chunk$set(echo = TRUE)
@@ -134,46 +135,45 @@ Once the data sources have been defined and downloaded (when applicable), the fo
 Unfold the code chunk below to observe all of the R code corresponding to the operations described above - otherwise, you can simply refer to the table (also below) to observe a random sample of the dataframe generated.
 
 ```{r warning=F, message=F}
-#set working directory and read in raw datasets
-setwd("/Users/mcurielinteros.ai/Documents/UMass/umass_dacss_datasciencefundamentals")
-social_media <- read_csv("GWI_social media use by country_2019.csv")
-mental_health <- read_csv("IMHE_mental disorders by country_2019.csv")
+# read in raw datasets
+social_media <- read_csv("GWI_socialmedia_2019.csv")
+mental_health <- read_csv("IMHE_mentaldisorders_2019.csv")
 
-#read and wrangle mental health data
+# read and wrangle mental health data
 mental_health <- mental_health %>%
   select(location_name, year, val) %>%
   rename(country_name = location_name, population_with_mental_disorders = val) %>%
   mutate(country_code = countrycode(sourcevar = country_name, origin = "country.name", destination = "iso3c"))
 
-#read and wrangle social media data
+# read and wrangle social media data
 social_media <- social_media %>%
   mutate(country_code = countrycode(sourcevar = country_name, origin = "country.name", destination = "iso3c")) %>%
-  mutate(social_media_use = hms(social_media_use)) %>% #split hours, minutes and seconds
+  mutate(social_media_use = hms(social_media_use)) %>% # split hours, minutes and seconds
   mutate(social_media_use = hour(social_media_use)*60 + minute(social_media_use)) %>% #to get total minutes spent on social media
   rename(minutes_on_social_media = social_media_use) %>%
-  select(country_code, year, minutes_on_social_media) #dropping country_name
+  select(country_code, year, minutes_on_social_media) # dropping country_name
 
-#merge social media and mental health dataframes
+# merge social media and mental health dataframes
 mental_health_social_media <- merge(mental_health, social_media, 
                                     by=c("country_code", "year"))
 
-#add country region
+# add country region
 mental_health_social_media <- mental_health_social_media %>%
   mutate(country_region = countrycode(sourcevar = country_name, origin = "country.name", destination = "region"))
 
-#read in socioeconomic data
+# read in socioeconomic data
 socioeconomic_indicators <- wb_data(
   indicator = c("SP.POP.TOTL","NY.GDP.MKTP.CD") #World Bank codes for GDP and total population
   , country = c("countries_only") , start_date = 2012
   , end_date = 2019
   )
 
-#wrangle socioeconomic data
+# wrangle socioeconomic data
 socioeconomic_indicators <- socioeconomic_indicators %>%
   rename(country_code = iso3c, year = date, total_population = SP.POP.TOTL, gdp = NY.GDP.MKTP.CD) %>%
   select(country_code, year, total_population, gdp) #dropping country name and two-digit code
 
-#merge socioeconomic data with social media and mental health dataframe
+# merge socioeconomic data with social media and mental health dataframe
 mental_health_social_media <- merge(
   mental_health_social_media
   , socioeconomic_indicators
@@ -192,7 +192,7 @@ mental_health_social_media <- merge(
 ```
 
 ```{r}
-#code to generate snippet of resulting dataframe
+# code to generate snippet of resulting dataframe
 rmarkdown::paged_table(mental_health_social_media[sample(nrow(mental_health_social_media), 10), ])
 ```
 
@@ -218,9 +218,9 @@ Having briefly explored the completeness of the data, we now focus on one of the
 
 ```{r fig.width = 5, fig.height = 5}
 lineplot_mental_health_social_media <- mental_health_social_media %>%
-  select(year, population_with_mental_disorders, minutes_on_social_media) %>% #selecting variables of interest
+  select(year, population_with_mental_disorders, minutes_on_social_media) %>% # selecting variables of interest
   mutate(population_with_mental_disorders = population_with_mental_disorders*100) %>%
-  group_by(year) %>% #step needed to calculate global means
+  group_by(year) %>% # step needed to calculate global means
   summarise_at(vars(population_with_mental_disorders:minutes_on_social_media), mean, na.rm = TRUE) %>%
   plot_ly(width = 500) %>%
   add_trace(
@@ -273,56 +273,61 @@ Prevalence of mental disorders has remained stable at around 16% of the populati
 Still focusing on the trends in the main data, the graphic below is a choropleth map that is meant to explore the hours people spend on social media, as well as the prevalence of mental disorders, by country over the years.
 
 ```{r warning=F, message=F}
-#animated map inspired by Plotly's source code
-#url for map: https://plotly.com/r/choropleth-maps/
-#url for buttons: https://plotly.com/r/custom-buttons/
 choroplethmap_mental_health_social_media <- mental_health_social_media %>%
   plot_ly(
-  type='choropleth'
-  , locations = ~country_code
-  , frame = ~year
-  #, height = 500
-  , width = 750
+    type = 'choropleth',
+    locations = ~country_code,
+    frame = ~year,
+    width = 750
   ) %>%
   add_trace(
-    z = ~population_with_mental_disorders
-    , colorscale = "YlOrRd"
-    , showscale = FALSE
-    , reversescale = TRUE
-    , text = "Mental Disorder Prevalence"
-    ) %>%
+    z = ~population_with_mental_disorders,
+    colorscale = "YlOrRd",
+    showscale = FALSE,
+    reversescale = TRUE,
+    text = "Mental Disorder Prevalence",
+    visible = FALSE  # Set the initial visibility of the trace to FALSE
+  ) %>%
   add_trace(
-    z = ~minutes_on_social_media
-    , colorscale = "Blues"
-    , showscale = FALSE
-    , reversescale = TRUE
-    , text = "Minutes on Social Media"
-    ) %>%
+    z = ~minutes_on_social_media,
+    colorscale = "Blues",
+    showscale = FALSE,
+    reversescale = TRUE,
+    text = "Minutes on Social Media",
+    visible = TRUE  # Set the initial visibility of the trace to TRUE
+  ) %>%
   layout(
-    title = list(text = "<b>Country Averages Over The Years</b>", x = 0)
-    , autosize = TRUE
-    , updatemenus = list(
+    title = list(text = "<b>Country Averages Over The Years</b>", x = 0),
+    autosize = TRUE,
+    updatemenus = list(
       list(
-        active = 0
-        , type= "buttons"
-        , direction = "right"
-        , xanchor = "center"
-        , yanchor = "bottom"
-        , x = .5
-        , y = -.1
-        , buttons = list(
+        active = 0,
+        type = "buttons",
+        direction = "right",
+        xanchor = "center",
+        yanchor = "bottom",
+        x = .5,
+        y = -.1,
+        buttons = list(
           list(
-            label = "Click to view minutes on social media (blue)"
-            , method = "update"
-            , args = list(list(visible = c(TRUE, FALSE))))
-          , list(
-            label = "Click to view mental disorder prevalence (red)"
-            , method = "update"
-            , args = list(list(visible = c(FALSE, TRUE))))
-    ))))
+            label = "Click to view minutes on social media (blue)",
+            method = "update",
+            args = list(list(visible = list(TRUE, FALSE)))
+          ),
+          list(
+            label = "Click to view mental disorder prevalence (red)",
+            method = "update",
+            args = list(list(visible = list(FALSE, TRUE)))
+          )
+        )
+      )
+    )
+  )
 
 choroplethmap_mental_health_social_media
+
 ```
+
 
 From the choropleth map we can see the change in data available on social media use for certain countries in Sub-Saharan Africa, versus the data available on mental disorders which remains constant over the years (both in terms of availability as well as amount, which is expected given that the global average on mental disorder prevalence also remains relatively constant at around 16%).
 
@@ -417,3 +422,4 @@ This could be maybe due to the use that is given to social media, e.g. maybe cou
 However bold the research findings may be, it is worth highlighting that this study has major limitations. First and foremost, this study is conducted at a country-level, and such high levels of aggregations entail caution since it depends on data being recollected correctly at several levels. Second, the availability and the method of each data source can always be put in question - e.g., trusting blindly in World Bank data would be a fallacy, as well as trusting the data on social media that 1) is generated by a private company with monetary interests and 2) is scarce. Lastly, with the scarcity on social media data, comes the limitation of selecting a slightly different age range with regards to mental health data (i.e., the data on social media uses an age range of 16-64, while the mental health data spans from 10-54).
 
 While these are significant limitations, this also sets a common ground for future explorations and opens up the possibility of including other aspects of social media, such as data for more countries, intent of use, or even time spent per application. Either way, this is a first step in demystifying or debunking the relationship between social media and mental health.
+
