@@ -6,7 +6,6 @@ library(wbstats) #used to add total population and gross domestic product to cou
 library(plotly) #used for dynamic visualizations
 library(naniar) #used for missing values visualization
 library(corrplot) #used for correlation matrix
-library(quarto)
 
 # deactive scientific notation and round to two decimals
 options(scipen = 100, digits=2)
@@ -71,6 +70,9 @@ mental_health_social_media <- merge(
 
 # code to generate snippet of resulting dataframe
 rmarkdown::paged_table(mental_health_social_media[sample(nrow(mental_health_social_media), 10), ])
+
+# export resulting dataframe to csv
+write.csv(mental_health_social_media, "socialmedia_mentalhealth_bycountry.csv")
 
 # plotting missing values 
 plot_missing_values <- gg_miss_fct(x = mental_health_social_media, fct = year)
